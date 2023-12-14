@@ -1,4 +1,5 @@
 #include <iomanip>
+#include <conio.h>
 
 #pragma once
 void checkFileExtension(const string filename, const string correctExt = "txt") {
@@ -12,14 +13,14 @@ void checkFileExtension(const string filename, const string correctExt = "txt") 
 			"Файл \"" + filename + "\" имеет некорректное расширение. Корректное: .txt");
 }
 
-inline void pause(const string text = "\nНажмите любую кнопку, чтобы продолжить...") {
+void pause(const string text = "\nНажмите любую кнопку, чтобы продолжить...") {
 	cout << text << endl;
 	system("pause > nul");
 }
 
 // TODO: добавить вывод curAccount прям отсюда
 // TODO: добавить флаг для выполнения system("cls")
-inline void showHeader(const string header,
+void showHeader(const string header,
 	const uint16_t side = 6, ostream& out = cout,
 	const string suffix = "\n", const char c = '=') {
 	uint16_t i;
@@ -32,13 +33,13 @@ inline void showHeader(const string header,
 		cout << suffix;
 }
 
-inline ostream& operator <<(ostream& out, const Account* ac) {
+ostream& operator <<(ostream& out, const Account* ac) {
 	if (ac != nullptr)
 		showHeader("Счёт #" + to_string(ac->id), 4, out);
 	return out;
 }
 
-inline ostream& operator <<(ostream& out, const Order* order) {
+ostream& operator <<(ostream& out, const Order* order) {
 	if (order != nullptr) {
 		showHeader("Транзакция #" + to_string(order->id), 3, out, "\n");
 		out << "sender: " << order->sender
@@ -51,12 +52,12 @@ inline ostream& operator <<(ostream& out, const Order* order) {
 	return out;
 }
 
-inline void clearCin() {
+void clearCin() {
 	cin.clear();
 	cin.ignore(numeric_limits<streamsize>::max(), '\n');
 }
 
-inline bool checkCin(const bool isBadAlready = false) {
+bool checkCin(const bool isBadAlready = false) {
 	if (isBadAlready || cin.fail() || cin.get() != '\n') {
 		clearCin();
 		cout << "Некорректный ввод!" << endl;
@@ -84,6 +85,23 @@ T getVar(const string prompt = "") {
 	}
 }
 
+template <typename T>
+T getVarFromFile(ifstream& f, const char termination = '\n',
+		const bool isLast = false) {
+	T var = {};
+	bool isBad;
+	const char peeked = f.peek();
+	if (peeked == '-' && is_unsigned<T>::value || peeked == '\n')
+		isBad = true;
+	else {
+		isBad = false;
+		f >> var;
+	}
+	if (isBad || f.fail() || !isLast && (f.eof() || f.get() != termination))
+		throw InvalidFileFormat("Некорректный формат файла");
+	return var;
+}
+
 Account* findAccount(Account* ptr, const uint32_t id) {
 	while (ptr != nullptr) {
 		if (ptr->id == id)
@@ -105,7 +123,7 @@ Account* findAccount(Account* ptr, const uint32_t id) {
 //	return true;
 //}
 
-bool iterSenderOrders(Order* ptr, const size_t id, Order*& start, Order*& end) {
+bool iterSenderOrders(Order* ptr, const uint32_t id, Order*& start, Order*& end) {
 	while (ptr != nullptr && ptr->sender != id)
 		ptr = ptr->nextSender;
 	if (ptr == nullptr)
@@ -118,12 +136,16 @@ template <typename T>
 void linkedAppend(T*& head, T* elem) {
 	if (head == nullptr)
 		head = elem;
-	elem->next = head->next;
-	head->next = elem;
+	else {
+		T* ptr = head;
+		while (ptr->next != nullptr)
+			ptr = ptr->next;
+		ptr->next = elem;
+	}
 }
 
 template <typename T>
-void freeLinked(T* ptr) {
+void freeLinked(T*& ptr) {
 	T* cur;
 	while (ptr != nullptr) {
 		cur = ptr;
@@ -163,4 +185,74 @@ void appendOrder(Order*& head, Order* ptr) {
 			cur->next = ptr;
 		}
 	}
+}
+
+float getAmount() {
+	float amount;
+	while ((amount = floor(getVar<float>(
+			"Введите сумму платежа") * 100) / 100) <= 0)
+		cout << "Сумма должна быть больше нуля (с учётом округления)!" << endl;
+	return amount;
+}
+
+bool confirm(const string prompt, const bool cls = true) {
+	if (cls)
+		system("cls");
+	cout << prompt << " (y\\n): ";
+	const char c = _getch();
+	if (cls)
+		system("cls");
+	return c == 'y' || c == 'Y' || c == 'н' || c == 'Н';
+}
+
+Order* getPrevSender(Order* orders, uint32_t accountId,
+		Order*& cur) {
+	Order *prevSender = nullptr;
+	cur = orders;
+	while (cur != nullptr && cur->sender != accountId) {
+		prevSender = cur;
+		cur = cur->nextSender;
+	}
+	return prevSender;
+}
+
+bool assignPrev(Order* orders, const uint32_t accountId,
+		const size_t orderId, Order* prevSender, 
+		Order*& cur, Order*& prev) {
+	prev = nullptr;
+	while (cur != nullptr && cur->sender == accountId &&
+		cur->id != orderId) {
+		prev = cur;
+		cur = cur->next;
+	}
+	if (cur == nullptr || cur->sender != accountId)
+		return false;
+	if (prev == nullptr && prevSender != nullptr) {
+		prev = prevSender;
+		while (prev != nullptr && prev->next != nullptr
+			&& prev->next->sender == prevSender->sender)
+			prev = prev->next;
+	}
+	return true;
+}
+
+void sortSenderOrders(Order** head) {
+	if (*head == nullptr || (*head)->next == nullptr)
+		return;
+	bool swapped;
+	Order** current;
+	Order* temp;
+	do {
+		swapped = false, current = head;
+		while ((*current)->next != nullptr) {
+			if ((*current)->amount > (*current)->next->amount) {
+				temp = *current;
+				*current = (*current)->next;
+				temp->next = (*current)->next;
+				(*current)->next = temp;
+				swapped = true;
+			}
+			current = &(*current)->next;
+		}
+	} while (swapped);
 }

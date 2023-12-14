@@ -25,6 +25,11 @@ public:
 	InvalidFileExtension(const string reason) : FileException(reason) {}
 };
 
+class InvalidFileFormat : public FileException {
+public:
+	InvalidFileFormat(const string reason) : FileException(reason) {}
+};
+
 class EmptyInputException : public BaseException {
 public:
 	EmptyInputException(const string reason) : BaseException(reason) {}
